@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>掃地雷 | /s-/ 蛇音訓練</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Noto Sans HK', sans-serif;
+            background-color: #f0fdf4; /* Soft green background */
+            touch-action: manipulation; /* Prevent double-tap zoom on mobile */
+            user-select: none;
+        }
+
+        /* Custom Animations */
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-5deg); }
+            75% { transform: translateX(5px) rotate(5deg); }
+        }
+
+        @keyframes bounceGlow {
+            0%, 100% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); transform: translateY(0); }
+            50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); transform: translateY(-3px); }
+        }
+
+        .animate-pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .animate-shake { animation: shake 0.4s ease-in-out; }
+        .animate-glow { animation: bounceGlow 2s infinite; }
+
+        /* Minesweeper Grid */
+        .grid-board {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 4px;
+            max-width: 450px;
+            margin: 0 auto;
+            background-color: #cbd5e1;
+            padding: 8px;
+            border-radius: 12px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .cell {
+            aspect-ratio: 1 / 1;
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            border: 2px solid #94a3b8;
+            border-top-color: #ffffff;
+            border-left-color: #ffffff;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+
+        .cell:active {
+            border: 2px solid #94a3b8;
+            background: #cbd5e1;
+        }
+
+        .cell.revealed {
+            background: #e2e8f0;
+            border: 1px solid #cbd5e1;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+            cursor: default;
+        }
+
+        .cell.bomb {
+            background-color: #fca5a5;
+            border-color: #ef4444;
+        }
+
+        /* Number Colors */
+        .num-1 { color: #2563eb; }
+        .num-2 { color: #16a34a; }
+        .num-3 { color: #dc2626; }
+        .num-4 { color: #9333ea; }
+        .num-5 { color: #842029; }
+        .num-6 { color: #0f5132; }
+        .num-7 { color: #000000; }
+        .num-8 { color: #6b7280; }
+
+        .hidden-screen { display: none !important; }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col items-center py-6 px-4">
+
+    <!-- 1. START SCREEN -->
+    <div id="start-screen" class="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 text-center animate-pop-in mt-10 border-4 border-green-200">
+        <div class="text-6xl mb-4">💣🗣️</div>
+        <h1 class="text-3xl font-black text-green-600 mb-2">掃地雷</h1>
+        <p class="text-lg font-bold text-slate-500 mb-6"> /s-/ 蛇音訓練</p>
+
+        <div class="bg-blue-50 rounded-xl p-5 mb-8 text-left border-2 border-blue-100">
+            <h2 class="text-xl font-bold text-blue-700 mb-3 flex items-center">
+                <span class="mr-2">🎮</span> 遊戲玩法：
+            </h2>
+            <ul class="space-y-2 text-slate-600 font-medium">
+                <li>1. 點擊方塊找出安全的區域。</li>
+                <li>2. 成功避開地雷後，會出現 <strong class="text-blue-600">兩個</strong> 詞語。</li>
+                <li>3. 請清楚讀出詞語，老師或家長會幫忙評分。</li>
+                <li>4. 順利完成 <strong class="text-blue-600">10個回合</strong> 即可獲勝！🎉</li>
+                <li>5. 小心！踩到地雷遊戲就會結束喔！</li>
+            </ul>
+        </div>
+
+        <h3 class="text-xl font-bold mb-4 text-slate-700">請選擇難度：</h3>
+        <div class="flex flex-col gap-4">
+            <button onclick="startGame('easy')" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-2xl text-xl transition transform hover:scale-105 shadow-lg shadow-green-200">
+                🟢 簡單模式 (Easy)
+            </button>
+            <button onclick="startGame('hard')" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 px-6 rounded-2xl text-xl transition transform hover:scale-105 shadow-lg shadow-orange-200">
+                🟠 挑戰模式 (Hard)
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. MAIN GAME SCREEN -->
+    <div id="game-screen" class="w-full max-w-lg hidden-screen flex flex-col h-full animate-pop-in">
+        
+        <!-- Header Stats -->
+        <div class="bg-white rounded-2xl shadow-md p-4 mb-4 flex justify-between items-center border-2 border-slate-200">
+            <div class="flex flex-col">
+                <span class="text-sm font-bold text-slate-400">回合進度</span>
+                <span class="text-2xl font-black text-blue-600" id="round-display">0 / 10</span>
+            </div>
+            
+            <button id="toggle-mode-btn" onclick="toggleAction()" class="bg-slate-100 hover:bg-slate-200 border-2 border-slate-300 px-4 py-2 rounded-xl font-bold text-lg flex items-center transition">
+                <span id="action-icon" class="mr-2">⛏️</span> <span id="action-text">挖掘</span>
+            </button>
+
+            <div class="flex flex-col text-right">
+                <span class="text-sm font-bold text-slate-400">剩餘地雷</span>
+                <span class="text-2xl font-black text-red-500" id="mine-count">10</span>
+            </div>
+        </div>
+
+        <!-- Minesweeper Board -->
+        <div id="board" class="grid-board w-full aspect-square bg-slate-300">
+            <!-- Cells generated by JS -->
+        </div>
+
+        <!-- Footer Stats (Therapist View) -->
+        <div class="mt-6 bg-white rounded-2xl shadow-md p-4 border-2 border-slate-200">
+            <h3 class="text-center font-bold text-slate-500 mb-2 border-b pb-2">📊 治療師/家長評分區</h3>
+            <div class="flex justify-around text-lg font-bold">
+                <div class="text-green-600">✅ 發音正確: <span id="score-correct">0</span></div>
+                <div class="text-orange-500">🔄 需要練習: <span id="score-incorrect">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. SPEECH THERAPY MODAL -->
+    <div id="speech-modal" class="fixed inset-0 bg-slate-900 bg-opacity-70 flex items-center justify-center p-4 z-50 hidden-screen">
+        <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl transform transition-all animate-pop-in">
+            <div class="bg-blue-500 p-4 text-center">
+                <h2 class="text-2xl font-black text-white">🗣️ 發音練習時間</h2>
+                <p class="text-blue-100 font-bold mt-1" id="modal-round-text">第 1 回合</p>
+            </div>
+            
+            <div class="p-8 text-center relative">
+                <div id="feedback-icon" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-8xl opacity-0 transition-opacity duration-300 pointer-events-none z-10">
+                    <!-- Check or Cross emoji will go here -->
+                </div>
+
+                <p class="text-slate-500 font-bold mb-2">請讀出：</p>
+                <div class="text-6xl font-black text-slate-800 mb-8 tracking-wider" id="stimulus-word">
+                    獅子
+                </div>
+                
+                <p class="text-sm text-slate-400 mb-4 border-b pb-2">家長 / 治療師評分區</p>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="handleFeedback(false)" class="bg-orange-100 text-orange-700 border-2 border-orange-300 hover:bg-orange-200 font-bold py-4 rounded-2xl text-xl transition active:scale-95">
+                        ❌<br>需要練習
+                    </button>
+                    <button onclick="handleFeedback(true)" class="bg-green-100 text-green-700 border-2 border-green-300 hover:bg-green-200 font-bold py-4 rounded-2xl text-xl transition active:scale-95 animate-glow">
+                        ✅<br>發音正確
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. END GAME SCREEN -->
+    <div id="end-screen" class="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 text-center hidden-screen mt-10">
+        <div id="end-emoji" class="text-8xl mb-4 animate-pop-in">🎉</div>
+        <h1 id="end-title" class="text-4xl font-black mb-2 text-green-600">恭喜過關！</h1>
+        <p id="end-message" class="text-xl font-bold text-slate-600 mb-8">你成功完成了10個回合的發音挑戰！</p>
+
+        <div class="bg-slate-50 rounded-2xl p-6 mb-8 border-2 border-slate-100">
+            <h3 class="text-lg font-bold text-slate-500 mb-4">🌟 你的表現 🌟</h3>
+            <div class="flex justify-center items-center gap-8">
+                <div class="text-center">
+                    <div class="text-4xl font-black text-green-500 mb-1" id="final-correct">0</div>
+                    <div class="text-sm font-bold text-slate-500">發音正確</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl font-black text-orange-400 mb-1" id="final-incorrect">0</div>
+                    <div class="text-sm font-bold text-slate-500">需要練習</div>
+                </div>
+            </div>
+        </div>
+
+        <button onclick="resetToStart()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-2xl text-xl transition transform hover:scale-105 shadow-lg shadow-blue-200">
+            🔄 再玩一次
+        </button>
+    </div>
+
+    <script>
+        // --- DATA & CONFIGURATION ---
+        const STIMULI = {
+            easy: ["獅子", "師傅", "施行", "詩歌", "詩人", "私人", "思想", "思考", "市場", "絲毫", "表示", "律師", "男士", "女士", "斯文", "舞獅", "士兵", "使者", "護士", "大使", "考試", "試用"],
+            hard: ["樹木", "石頭", "山林", "商人", "手機", "説明", "睡覺", "心情", "世界", "世代", "室内", "四方", "四周", "十分", "十足", "食物", "果實", "青蛇", "毒蛇", "信息", "瘦弱", "修理", "說明", "說話", "知識", "三百萬", "三十萬", "十二蚊", "二十蚊", "洗手間", "洗衣機", "新手機", "新食法", "新商場", "笑口棗", "三十三"]
+        };
+
+        const ROWS = 9;
+        const COLS = 9;
+        const MINES = 10;
+        const TARGET_ROUNDS = 10; // Number of successful clicks needed to win
+
+        // --- GAME STATE ---
+        let board = [];
+        let isGameOver = false;
+        let flagsPlaced = 0;
+        let actionIsDig = true; // true = Dig, false = Flag
+        
+        let currentMode = 'easy';
+        let availableWords = [];
+        let roundsCompleted = 0;
+        
+        // Therapist Stats
+        let stats = { correct: 0, incorrect: 0 };
+        
+        // Modal State
+        let currentWordIndexInRound = 0; // 0 for 1st word, 1 for 2nd word
+        let isModalActive = false;
+
+        // --- AUDIO SYSTEM (Web Audio API for offline capability) ---
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            
+            if (type === 'click') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'correct') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.setValueAtTime(800, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'incorrect') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(200, now + 0.3);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'bomb') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.5);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } else if (type === 'win') {
+                osc.type = 'sine';
+                const notes = [400, 500, 600, 800];
+                notes.forEach((freq, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.type = 'sine';
+                    o.frequency.value = freq;
+                    o.connect(g);
+                    g.connect(audioCtx.destination);
+                    g.gain.setValueAtTime(0.1, now + i*0.15);
+                    g.gain.exponentialRampToValueAtTime(0.01, now + i*0.15 + 0.3);
+                    o.start(now + i*0.15);
+                    o.stop(now + i*0.15 + 0.3);
+                });
+            }
+        }
+
+        // --- CORE LOGIC ---
+
+        function startGame(mode) {
+            initAudio(); // Initialize audio on first user interaction
+            currentMode = mode;
+            // Copy and shuffle array
+            availableWords = [...STIMULI[mode]].sort(() => Math.random() - 0.5);
+            
+            roundsCompleted = 0;
+            stats = { correct: 0, incorrect: 0 };
+            flagsPlaced = 0;
+            isGameOver = false;
+            actionIsDig = true;
+            updateActionBtn();
+            
+            updateStatsUI();
+            
+            document.getElementById('start-screen').classList.add('hidden-screen');
+            document.getElementById('end-screen').classList.add('hidden-screen');
+            document.getElementById('game-screen').classList.remove('hidden-screen');
+            
+            generateBoard();
+            renderBoard();
+        }
+
+        function toggleAction() {
+            initAudio();
+            actionIsDig = !actionIsDig;
+            updateActionBtn();
+        }
+
+        function updateActionBtn() {
+            const btn = document.getElementById('toggle-mode-btn');
+            const icon = document.getElementById('action-icon');
+            const text = document.getElementById('action-text');
+            
+            if (actionIsDig) {
+                icon.innerText = '⛏️';
+                text.innerText = '挖掘';
+                btn.className = "bg-blue-100 hover:bg-blue-200 border-2 border-blue-400 text-blue-800 px-4 py-2 rounded-xl font-bold text-lg flex items-center transition";
+            } else {
+                icon.innerText = '🚩';
+                text.innerText = '插旗';
+                btn.className = "bg-orange-100 hover:bg-orange-200 border-2 border-orange-400 text-orange-800 px-4 py-2 rounded-xl font-bold text-lg flex items-center transition";
+            }
+        }
+
+        function generateBoard() {
+            board = Array(ROWS).fill().map(() => Array(COLS).fill(null).map(() => ({
+                isMine: false,
+                isRevealed: false,
+                isFlagged: false,
+                neighborMines: 0
+            })));
+
+            // Place Mines
+            let minesPlaced = 0;
+            while (minesPlaced < MINES) {
+                let r = Math.floor(Math.random() * ROWS);
+                let c = Math.floor(Math.random() * COLS);
+                if (!board[r][c].isMine) {
+                    board[r][c].isMine = true;
+                    minesPlaced++;
+                }
+            }
+
+            // Calculate Neighbors
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (!board[r][c].isMine) {
+                        let count = 0;
+                        for (let dr = -1; dr <= 1; dr++) {
+                            for (let dc = -1; dc <= 1; dc++) {
+                                let nr = r + dr;
+                                let nc = c + dc;
+                                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].isMine) {
+                                    count++;
+                                }
+                            }
+                        }
+                        board[r][c].neighborMines = count;
+                    }
+                }
+            }
+        }
+
+        function renderBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const cellData = board[r][c];
+                    const cellEl = document.createElement('div');
+                    cellEl.className = 'cell';
+                    
+                    if (cellData.isRevealed) {
+                        cellEl.classList.add('revealed');
+                        if (cellData.isMine) {
+                            cellEl.classList.add('bomb');
+                            cellEl.innerHTML = '💣';
+                        } else if (cellData.neighborMines > 0) {
+                            cellEl.innerHTML = cellData.neighborMines;
+                            cellEl.classList.add(`num-${cellData.neighborMines}`);
+                        }
+                    } else if (cellData.isFlagged) {
+                        cellEl.innerHTML = '🚩';
+                    }
+
+                    // Events
+                    cellEl.onclick = () => handleCellClick(r, c);
+                    // Right click for desktop flag
+                    cellEl.oncontextmenu = (e) => {
+                        e.preventDefault();
+                        if(!isGameOver && !isModalActive) toggleFlag(r, c);
+                    };
+
+                    boardEl.appendChild(cellEl);
+                }
+            }
+            
+            document.getElementById('mine-count').innerText = MINES - flagsPlaced;
+        }
+
+        function toggleFlag(r, c) {
+            initAudio();
+            const cell = board[r][c];
+            if (cell.isRevealed) return;
+
+            if (cell.isFlagged) {
+                cell.isFlagged = false;
+                flagsPlaced--;
+            } else {
+                if (flagsPlaced < MINES) {
+                    cell.isFlagged = true;
+                    flagsPlaced++;
+                }
+            }
+            playSound('click');
+            renderBoard();
+        }
+
+        function handleCellClick(r, c) {
+            initAudio();
+            if (isGameOver || isModalActive) return;
+            
+            const cell = board[r][c];
+            
+            // If in Flag mode
+            if (!actionIsDig) {
+                toggleFlag(r, c);
+                return;
+            }
+
+            // Prevent clicking flagged or already revealed cells
+            if (cell.isFlagged || cell.isRevealed) return;
+
+            if (cell.isMine) {
+                // Game Over - Lose
+                cell.isRevealed = true;
+                playSound('bomb');
+                document.getElementById('board').classList.add('animate-shake');
+                endGame(false);
+            } else {
+                // Safe - Trigger Therapy Round
+                revealCell(r, c); // Now features classic flood fill
+                playSound('click');
+                renderBoard();
+                
+                // Wait briefly for board to update, then show modal
+                setTimeout(() => {
+                    startTherapyRound();
+                }, 300);
+            }
+        }
+
+        // Flood fill algorithm to reveal surrounding empty cells like classic minesweeper
+        function revealCell(r, c) {
+            if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+            
+            const cell = board[r][c];
+            if (cell.isRevealed || cell.isFlagged || cell.isMine) return;
+            
+            cell.isRevealed = true;
+
+            // If it's an empty cell (0 neighbors), recursively reveal surrounding cells
+            if (cell.neighborMines === 0) {
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        if (dr !== 0 || dc !== 0) {
+                            revealCell(r + dr, c + dc);
+                        }
+                    }
+                }
+            }
+        }
+
+        function getRandomWord() {
+            if (availableWords.length === 0) {
+                // Reshuffle if we run out (rare but possible)
+                availableWords = [...STIMULI[currentMode]].sort(() => Math.random() - 0.5);
+            }
+            return availableWords.pop();
+        }
+
+        function startTherapyRound() {
+            isModalActive = true;
+            currentWordIndexInRound = 0; // First word
+            roundsCompleted++;
+            
+            document.getElementById('modal-round-text').innerText = `第 ${roundsCompleted} / ${TARGET_ROUNDS} 回合`;
+            
+            showNextWordInModal();
+            document.getElementById('speech-modal').classList.remove('hidden-screen');
+        }
+
+        function showNextWordInModal() {
+            const wordEl = document.getElementById('stimulus-word');
+            wordEl.innerText = getRandomWord();
+            
+            // Reset feedback icon
+            const iconEl = document.getElementById('feedback-icon');
+            iconEl.style.opacity = '0';
+            iconEl.classList.remove('animate-pop-in');
+        }
+
+        function handleFeedback(isCorrect) {
+            initAudio();
+            
+            // Prevent double clicking quickly
+            if(document.getElementById('feedback-icon').style.opacity === '1') return;
+
+            // Visual & Audio Feedback
+            const iconEl = document.getElementById('feedback-icon');
+            if (isCorrect) {
+                playSound('correct');
+                stats.correct++;
+                iconEl.innerText = '✅';
+            } else {
+                playSound('incorrect');
+                stats.incorrect++;
+                iconEl.innerText = '❌';
+            }
+            
+            iconEl.style.opacity = '1';
+            iconEl.classList.add('animate-pop-in');
+            
+            updateStatsUI();
+
+            // Logic for next word or closing modal
+            setTimeout(() => {
+                currentWordIndexInRound++;
+                if (currentWordIndexInRound < 2) {
+                    // Show second word
+                    showNextWordInModal();
+                } else {
+                    // Round complete
+                    closeModal();
+                }
+            }, 800); // Wait 800ms before transition
+        }
+
+        function closeModal() {
+            document.getElementById('speech-modal').classList.add('hidden-screen');
+            isModalActive = false;
+            
+            // Check if all safe cells are revealed (classic win condition)
+            let safeCellsRevealed = 0;
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    if(!board[r][c].isMine && board[r][c].isRevealed) {
+                        safeCellsRevealed++;
+                    }
+                }
+            }
+            const isBoardCleared = safeCellsRevealed === (ROWS * COLS - MINES);
+            
+            // Check Win Condition: 10 rounds completed OR board completely cleared
+            if (roundsCompleted >= TARGET_ROUNDS || isBoardCleared) {
+                setTimeout(() => endGame(true), 300);
+            }
+        }
+
+        function updateStatsUI() {
+            document.getElementById('round-display').innerText = `${roundsCompleted} / ${TARGET_ROUNDS}`;
+            document.getElementById('score-correct').innerText = stats.correct;
+            document.getElementById('score-incorrect').innerText = stats.incorrect;
+        }
+
+        function endGame(isWin) {
+            isGameOver = true;
+            
+            // Reveal all bombs if lost
+            if (!isWin) {
+                for(let r=0; r<ROWS; r++){
+                    for(let c=0; c<COLS; c++){
+                        if(board[r][c].isMine) board[r][c].isRevealed = true;
+                    }
+                }
+                renderBoard();
+            }
+
+            setTimeout(() => {
+                document.getElementById('game-screen').classList.add('hidden-screen');
+                document.getElementById('end-screen').classList.remove('hidden-screen');
+                
+                const title = document.getElementById('end-title');
+                const msg = document.getElementById('end-message');
+                const emoji = document.getElementById('end-emoji');
+                
+                document.getElementById('final-correct').innerText = stats.correct;
+                document.getElementById('final-incorrect').innerText = stats.incorrect;
+
+                if (isWin) {
+                    playSound('win');
+                    title.innerText = "恭喜過關！";
+                    title.className = "text-4xl font-black mb-2 text-green-600";
+                    msg.innerText = `你成功完成了 ${TARGET_ROUNDS} 個回合的發音挑戰！`;
+                    emoji.innerText = "🎉";
+                } else {
+                    playSound('incorrect'); // slightly sad tone
+                    title.innerText = "踩到地雷了！";
+                    title.className = "text-4xl font-black mb-2 text-red-600";
+                    msg.innerText = `別灰心，你已經完成了 ${roundsCompleted} 個回合，繼續努力！`;
+                    emoji.innerText = "💥";
+                }
+            }, isWin ? 500 : 1500); // Longer delay to see board if lost
+        }
+
+        function resetToStart() {
+            initAudio();
+            document.getElementById('end-screen').classList.add('hidden-screen');
+            document.getElementById('start-screen').classList.remove('hidden-screen');
+        }
+
+    </script>
+</body>
+</html>
